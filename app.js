@@ -9,7 +9,8 @@ const CATS = {
   foret:      { l: "Forêts & nature", e: "🌳" },
   animaux:    { l: "Fermes & animaux", e: "🐐" },
   musee:      { l: "Musées & intérieur", e: "🏛️" },
-  parc:       { l: "Parcs & jeux", e: "🎠" },
+  jeux:       { l: "Aires de jeux", e: "🛝" },
+  parc:       { l: "Parcs & loisirs", e: "🎠" },
   patrimoine: { l: "Villages & patrimoine", e: "🏰" },
   vue:        { l: "Pointes & points de vue", e: "🌊" }
 };
