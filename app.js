@@ -9,6 +9,7 @@ const CATS = {
   foret:      { l: "Forêts & nature", e: "🌳" },
   animaux:    { l: "Fermes & animaux", e: "🐐" },
   musee:      { l: "Musées & intérieur", e: "🏛️" },
+  littoral:   { l: "Plage & rochers", e: "🦀" },
   jeux:       { l: "Aires de jeux", e: "🛝" },
   parc:       { l: "Parcs & loisirs", e: "🎠" },
   patrimoine: { l: "Villages & patrimoine", e: "🏰" },
@@ -26,7 +27,8 @@ const CRITERIA = [
   { k: "parking", l: "Parking proche", e: "🅿️" },
   { k: "annee", l: "Ouvert toute l'année", e: "📅" },
   { k: "eau", l: "Pieds dans l'eau", e: "🌊" },
-  { k: "courte", l: "Balade courte (< 1 h)", e: "⏱️" }
+  { k: "courte", l: "Balade courte (< 1 h)", e: "⏱️" },
+  { k: "maree", l: "À faire à marée basse", e: "🐚" }
 ];
 const DURS = [20, 40, 60, 90, 0];
 const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", "Pas aimé"]];
@@ -106,7 +108,7 @@ function cardHTML(p) {
     <div class="ic">${CATS[p.c]?.e || "📍"}</div>
     <div class="body">
       <h3>${esc(p.n)}</h3>
-      <div class="meta">${esc(p.v)} · 🚗 ~${fmtMin(p.min)}</div>
+      <div class="meta">${esc(p.v)} · 🚗 ~${fmtMin(p.min)}${p.km ? ` · 🚶 ${String(p.km).replace(".", ",")} km` : ""}</div>
       <div class="crit">${crits}</div>
       ${p.done ? `<span class="badge b-done">✓ Fait${last ? " · " + "★".repeat(last.note || 0) : ""}</span>` : ""}
       ${last && last.refaire ? `<span class="badge b-again">↻ À refaire</span>` : ""}
@@ -284,7 +286,9 @@ function openDetail(id, keepScroll) {
   openSheet(`${head(esc(p.n), `<span style="font-size:28px">${CATS[p.c]?.e || "📍"}</span>`)}
     <div class="muted">${esc(p.v)} · ${esc(CATS[p.c]?.l || "")} · 🚗 ~${fmtMin(p.min)} depuis ${S.settings.from === "gps" && gps ? "ma position" : esc(S.settings.home.label)}</div>
     ${p.s ? `<div class="info">🗓️ ${esc(p.s)}${closedNow(p) ? " — <b style='color:var(--ruz)'>sans doute fermé ce mois-ci</b>" : ""}</div>` : ""}
+    ${p.km ? `<div class="info">🚶 Boucle d'environ ${String(p.km).replace(".", ",")} km · ~${fmtMin(p.dur || 60)} au rythme d'un petit</div>` : ""}
     ${p.d ? `<p>${esc(p.d)}</p>` : ""}
+    ${p.k.maree ? `<div class="label">Marées basses à venir · ${esc(tidePoint(p).n)}</div><div class="info" id="tideInfo">⏳ Calcul des marées…</div>` : ""}
     <div class="btns">
       <a class="btn primary" href="${nav}" target="_blank" rel="noopener">🧭 Y aller</a>
       <button class="btn" data-fav="${esc(id)}">${p.fav ? "★ Dans mes envies" : "☆ Envie d'y aller"}</button>
@@ -300,6 +304,7 @@ function openDetail(id, keepScroll) {
     </div>`, root => {
     if (keepScroll) root.scrollTop = scroll;
     hydratePhotos(root);
+    if (p.k.maree) fillTideInfo(p, $("#tideInfo", root));
     $("#addVisit", root).onclick = () => openVisitForm(id);
     $("#editPlace", root).onclick = () => openPlaceForm(id);
     $("#delPlace", root).onclick = () => {
@@ -508,14 +513,15 @@ const rainy = d => (d.code >= 51 && d.code <= 67) || (d.code >= 80) || d.pp >= 6
 async function fetchWeather() {
   const o = origin();
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${o.lat.toFixed(3)}&longitude=${o.lon.toFixed(3)}` +
-    `&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max` +
+    `&current=temperature_2m,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,wind_speed_10m_max,sunrise,sunset` +
     `&timezone=Europe%2FParis&forecast_days=7`;
   const r = await fetch(url); if (!r.ok) throw new Error("météo");
   const j = await r.json();
   const data = { at: Date.now(), where: S.settings.from === "gps" && gps ? "ma position" : S.settings.home.label,
     now: { t: j.current.temperature_2m, code: j.current.weather_code, wind: j.current.wind_speed_10m },
     days: j.daily.time.map((t, i) => ({ date: t, code: j.daily.weather_code[i], max: j.daily.temperature_2m_max[i], min: j.daily.temperature_2m_min[i],
-      pp: j.daily.precipitation_probability_max[i] ?? 0, sum: j.daily.precipitation_sum[i] ?? 0, wind: j.daily.wind_speed_10m_max[i] ?? 0 })) };
+      pp: j.daily.precipitation_probability_max[i] ?? 0, sum: j.daily.precipitation_sum[i] ?? 0, wind: j.daily.wind_speed_10m_max[i] ?? 0,
+      sr: j.daily.sunrise ? j.daily.sunrise[i] : null, ss: j.daily.sunset ? j.daily.sunset[i] : null })) };
   try { localStorage.setItem("baleadenn.meteo", JSON.stringify(data)); } catch (e) {}
   return data;
 }
@@ -524,12 +530,16 @@ async function renderWeather() {
   let data = null;
   try { data = JSON.parse(localStorage.getItem("baleadenn.meteo") || "null"); } catch (e) {}
   if (data) drawWeather(data, true); else box.innerHTML = `<div class="empty">⏳ Chargement de la météo…</div>`;
+  const tp = tidePoint(origin());
+  getTides(tp).then(() => { if (currentView === "amzer" && lastWeather) drawWeather(lastWeather, false); }).catch(() => {});
   try { data = await fetchWeather(); if (currentView === "amzer") drawWeather(data, false); }
   catch (e) { if (!data) box.innerHTML = `<div class="empty">Météo indisponible (pas de réseau ?).<br><button class="btn" id="wRetry">Réessayer</button></div>`;
     else toast("Météo hors ligne : dernières prévisions affichées");
     const b = $("#wRetry"); if (b) b.onclick = renderWeather; }
 }
+let lastWeather = null;
 function drawWeather(data, stale) {
+  lastWeather = data;
   const box = $("#weather");
   if (weatherDay >= data.days.length) weatherDay = 0;
   const n = WMO(data.now.code);
@@ -540,8 +550,18 @@ function drawWeather(data, stale) {
   const month = dd.getMonth() + 1;
   let ideas = allPlaces().map(enrich).filter(p => (!F.max || p.min <= Math.max(F.max, 20)) && !closedNow(p, month));
   ideas = wet ? ideas.filter(p => p.k.interieur) : ideas.filter(p => !p.k.interieur && !(windy && p.c === "vue"));
-  ideas.sort((a, b) => (a.done - b.done) || (b.fav - a.fav) || (a.min - b.min));
+  // Marées du jour choisi (si déjà chargées)
+  const tp = tidePoint(origin()), td = tideMem[tp.n];
+  const lows = td ? td.ex.filter(e => e.low && dayKey(e.ms) === d.date) : [];
+  const allT = td ? td.ex.filter(e => dayKey(e.ms) === d.date) : [];
+  const goodLow = lows.find(e => isDaytime(e.ms));
+  const boost = p => (!wet && goodLow && p.k.maree) ? 1 : 0;
+  ideas.sort((a, b) => (boost(b) - boost(a)) || (a.done - b.done) || (b.fav - a.fav) || (a.min - b.min));
   ideas = ideas.slice(0, 8);
+  const tideHTML = td ? `<div class="tides"><div class="tides-h">🌊 Marées · ${esc(tp.n)}</div>${allT.length ? allT.map(e =>
+      `<div class="tide ${e.low ? "low" : "high"}"><span>${e.low ? "⬇️ Basse" : "⬆️ Haute"}</span><b>${hhmm(e.ms)}</b>${e.low ? `<em>${isDaytime(e.ms) ? "☀️" : "🌙"}</em>` : ""}</div>`).join("") : `<div class="muted">Pas de données pour ce jour.</div>`}</div>`
+    : `<div class="tides muted" style="font-size:13px">🌊 Marées en cours de chargement… (ou indisponibles hors ligne)</div>`;
+  const lowAdvice = (!wet && goodLow) ? `<div class="advice low">🦀 Mor izel ! Marée basse à <b>${hhmm(goodLow.ms)}</b> : créneau idéal pour une balade dans les rochers de ${hhmm(goodLow.ms - 3600e3)} à ${hhmm(goodLow.ms + 7200e3)}.</div>` : "";
   box.innerHTML = `
     <div class="now"><div class="w">${n[0]}</div><div style="flex:1"><div class="t">${Math.round(data.now.t)}°</div><div>${n[1]} · vent ${Math.round(data.now.wind)} km/h</div></div><div class="br">${n[2]}</div></div>
     <div class="muted" style="font-size:12px;margin-top:4px">Prévisions pour ${esc(data.where)}${stale ? " · mise à jour…" : ""}</div>
@@ -550,10 +570,66 @@ function drawWeather(data, stale) {
     <div class="advice ${wet ? "rain" : "sun"}">${wet
       ? `☔ ${WMO(d.code)[2]} ! Pluie probable ${dayName} (${d.pp}%). Voici des idées à l'abri :`
       : `${WMO(d.code)[0]} ${dayName.charAt(0).toUpperCase() + dayName.slice(1)} s'annonce sec (${d.pp}% de risque de pluie). Idées dehors :`}</div>
+    ${tideHTML}
+    ${lowAdvice}
     ${windy ? `<div class="advice wind">💨 Avel bras ! Vent fort (${Math.round(d.wind)} km/h) : évitez les pointes et les falaises avec le petit.</div>` : ""}
     <div class="list">${ideas.length ? ideas.map(cardHTML).join("") : `<div class="empty">Pas d'idée dans la durée de trajet choisie (onglet Lieux).</div>`}</div>
-    <p class="muted" style="font-size:12px">Les lieux pas encore faits et vos envies passent en premier. Données météo : Open-Meteo.</p>`;
+    <p class="muted" style="font-size:12px">Les lieux pas encore faits et vos envies passent en premier. Données météo et marées : Open-Meteo (horaires de marée indicatifs, à confirmer sur <a href="https://maree.shom.fr/" target="_blank" rel="noopener">maree.shom.fr</a>).</p>`;
   $$("[data-wd]", box).forEach(b => b.onclick = () => { weatherDay = +b.dataset.wd; drawWeather(data, false); });
+}
+
+// ---------- Marées ----------
+// Points en mer (le modèle n'a pas de données sur la terre ferme) ; le plus proche du lieu est utilisé.
+const TIDE_PTS = [
+  { n: "Bénodet", lat: 47.84, lon: -4.10 }, { n: "Concarneau", lat: 47.83, lon: -3.93 },
+  { n: "Névez", lat: 47.77, lon: -3.79 }, { n: "Loctudy", lat: 47.78, lon: -4.18 },
+  { n: "Douarnenez", lat: 48.13, lon: -4.38 }, { n: "Audierne", lat: 47.99, lon: -4.57 },
+  { n: "Morgat", lat: 48.20, lon: -4.48 }
+];
+const tidePoint = p => TIDE_PTS.reduce((b, t) => km(p, t) < km(p, b) ? t : b);
+const tideMem = {};
+const hhmm = ms => { const d = new Date(ms); return d.getHours() + "h" + String(d.getMinutes()).padStart(2, "0"); };
+const dayKey = ms => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+function isDaytime(ms) {
+  // Marée basse « de jour » : au moins 1 h après le lever et 1 h 30 avant le coucher du soleil.
+  const w = lastWeather || (() => { try { return JSON.parse(localStorage.getItem("baleadenn.meteo") || "null"); } catch (e) { return null; } })();
+  const day = w && w.days && w.days.find(x => x.date === dayKey(ms));
+  let sr, ss;
+  if (day && day.sr && day.ss) { sr = new Date(day.sr).getTime(); ss = new Date(day.ss).getTime(); }
+  else { const d0 = new Date(ms); d0.setHours(8, 0, 0, 0); sr = d0.getTime(); ss = sr + 11 * 3600e3; }
+  return ms >= sr + 3600e3 && ms <= ss - 5400e3;
+}
+async function getTides(pt) {
+  const key = "baleadenn.maree." + pt.n, fresh = c => c && Date.now() - c.at < 6 * 3600e3;
+  if (fresh(tideMem[pt.n])) return tideMem[pt.n];
+  try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (fresh(c)) return (tideMem[pt.n] = c); } catch (e) {}
+  const url = `https://marine-api.open-meteo.com/v1/marine?latitude=${pt.lat}&longitude=${pt.lon}&hourly=sea_level_height_msl&timezone=Europe%2FParis&forecast_days=7`;
+  const r = await fetch(url); if (!r.ok) throw new Error("marée");
+  const j = await r.json();
+  const t = j.hourly.time, h = j.hourly.sea_level_height_msl, ex = [];
+  for (let i = 1; i < h.length - 1; i++) {
+    const a = h[i - 1], b = h[i], c = h[i + 1];
+    if (a == null || b == null || c == null) continue;
+    const low = b < a && b <= c, high = b > a && b >= c;
+    if (!low && !high) continue;
+    const den = a - 2 * b + c, off = den ? Math.max(-0.5, Math.min(0.5, 0.5 * (a - c) / den)) : 0; // affinage à la minute
+    ex.push({ ms: new Date(t[i]).getTime() + off * 3600e3, low });
+  }
+  if (!ex.length) throw new Error("marée vide");
+  const data = { at: Date.now(), n: pt.n, ex };
+  tideMem[pt.n] = data;
+  try { localStorage.setItem(key, JSON.stringify(data)); } catch (e) {}
+  return data;
+}
+function fillTideInfo(p, el) {
+  if (!el) return;
+  getTides(tidePoint(p)).then(td => {
+    const next = td.ex.filter(e => e.low && e.ms > Date.now() - 3600e3).slice(0, 6);
+    if (!next.length) { el.textContent = "Pas de prévision disponible."; return; }
+    el.innerHTML = next.map(e => { const d = new Date(e.ms);
+      return `<div class="tide low ${isDaytime(e.ms) ? "" : "night"}"><span>${DAYS[d.getDay()]} ${d.getDate()}</span><b>${hhmm(e.ms)}</b><em>${isDaytime(e.ms) ? `☀️ ${hhmm(e.ms - 3600e3)} → ${hhmm(e.ms + 7200e3)}` : "🌙 de nuit"}</em></div>`; }).join("") +
+      `<div class="muted" style="font-size:12px;margin-top:6px">Créneau conseillé : 1 h avant à 2 h après la marée basse. Horaires indicatifs — <a href="https://maree.shom.fr/" target="_blank" rel="noopener">vérifier sur le SHOM</a>.</div>`;
+  }).catch(() => { el.innerHTML = `Marées indisponibles (pas de réseau ?). <a href="https://maree.shom.fr/" target="_blank" rel="noopener">Voir le SHOM</a>`; });
 }
 
 // ---------- Souvenirs ----------

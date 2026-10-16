@@ -16,7 +16,7 @@
   --glaz:#17325c; --glaz2:#24518f; --glaz-soft:#e3eaf5;
   --orange:#e57f1f; --melen:#f2c230; --ruz:#b8322a; --gwer:#2f7a4b;
   --faience:#fbf6ea; --card:#fffdf8; --ink:#1f2430; --muted:#5f6675; --line:#e6dcc6;
-  --plage:#2f8fb8; --foret:#2f7a4b; --animaux:#c0702b; --musee:#7a4fa0; --parc:#d4428a; --jeux:#e0a100; --patrimoine:#8a6a3b; --vue:#24518f;
+  --plage:#2f8fb8; --foret:#2f7a4b; --animaux:#c0702b; --musee:#7a4fa0; --parc:#d4428a; --jeux:#e0a100; --littoral:#0f8a8a; --patrimoine:#8a6a3b; --vue:#24518f;
   --tabs-h:64px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -71,7 +71,7 @@ h3{margin:0}
 .b-again{background:#fff1d6;color:#9a5a10}
 .empty{text-align:center;padding:30px 10px;color:var(--muted)}
 .count{font-size:13px;color:var(--muted)}
-.cat-plage{--cat:var(--plage)}.cat-foret{--cat:var(--foret)}.cat-animaux{--cat:var(--animaux)}.cat-musee{--cat:var(--musee)}.cat-parc{--cat:var(--parc)}.cat-jeux{--cat:var(--jeux)}.cat-patrimoine{--cat:var(--patrimoine)}.cat-vue{--cat:var(--vue)}
+.cat-plage{--cat:var(--plage)}.cat-foret{--cat:var(--foret)}.cat-animaux{--cat:var(--animaux)}.cat-musee{--cat:var(--musee)}.cat-parc{--cat:var(--parc)}.cat-jeux{--cat:var(--jeux)}.cat-littoral{--cat:var(--littoral)}.cat-patrimoine{--cat:var(--patrimoine)}.cat-vue{--cat:var(--vue)}
 
 .fab{position:fixed;right:16px;bottom:calc(var(--tabs-h) + 16px + env(safe-area-inset-bottom));z-index:600;background:var(--orange);color:#fff;border:0;border-radius:999px;padding:14px 18px;font-weight:800;font-size:16px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
 
@@ -113,6 +113,16 @@ h3{margin:0}
 .advice{border-radius:16px;padding:12px 14px;margin:12px 0 4px;font-weight:700}
 .advice.rain{background:#e2ecf8;color:var(--glaz)}
 .advice.sun{background:#fff3d4;color:#7a4a00}
+.advice.low{background:#d9f1ef;color:#0b5f5f}
+.tides{background:#fff;border:1px solid var(--line);border-radius:16px;padding:10px 12px;margin:12px 0 0}
+.tides-h{font-weight:800;color:var(--glaz);margin-bottom:4px}
+.tide{display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:15px}
+.tide:last-child{border-bottom:0}
+.tide span{min-width:84px;color:var(--muted)}
+.tide b{min-width:52px}
+.tide em{font-style:normal;font-size:13px;color:var(--muted)}
+.tide.low b{color:#0b5f5f}
+.tide.night{opacity:.6}
 .advice.wind{background:#fbe3df;color:var(--ruz);font-weight:600;font-size:14px}
 
 /* Souvenirs */
