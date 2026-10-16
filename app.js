@@ -200,6 +200,7 @@ function refresh() { show(currentView); }
 let sheetOpen = false, onSheetClose = null;
 function openSheet(html, mount) {
   if (pickMap) { pickMap.remove(); pickMap = null; }
+  if (detailMap) { detailMap.remove(); detailMap = null; }
   $("#sheetIn").innerHTML = html;
   $("#sheet").classList.remove("hidden");
   $("#sheetIn").scrollTop = 0;
@@ -214,6 +215,7 @@ function closeSheet(fromPop) {
   document.body.style.overflow = "";
   $("#sheetIn").innerHTML = "";
   if (pickMap) { pickMap.remove(); pickMap = null; }
+  if (detailMap) { detailMap.remove(); detailMap = null; }
   if (onSheetClose) { const f = onSheetClose; onSheetClose = null; f(); }
   if (!fromPop) history.back();
 }
@@ -288,6 +290,10 @@ function openDetail(id, keepScroll) {
     ${p.s ? `<div class="info">🗓️ ${esc(p.s)}${closedNow(p) ? " — <b style='color:var(--ruz)'>sans doute fermé ce mois-ci</b>" : ""}</div>` : ""}
     ${p.km ? `<div class="info">🚶 Boucle d'environ ${String(p.km).replace(".", ",")} km · ~${fmtMin(p.dur || 60)} au rythme d'un petit</div>` : ""}
     ${p.d ? `<p>${esc(p.d)}</p>` : ""}
+    <div class="label">${p.r ? "Le parcours" : "Sur la carte"}</div>
+    <div id="placeMap" class="placemap"></div>
+    ${p.r ? `<div class="route-legend"><span><i class="ln aller"></i>Aller : grève &amp; rochers</span><span><i class="ln retour"></i>Retour : sentier ou route</span></div>
+    <div class="muted" style="font-size:12px">Tracé indicatif : l'aller suit la côte à vol d'oiseau, le retour est calculé sur les chemins. Touchez « Satellite » pour voir plages et rochers.</div>` : ""}
     ${p.k.maree ? `<div class="label">Marées basses à venir · ${esc(tidePoint(p).n)}</div><div class="info" id="tideInfo">⏳ Calcul des marées…</div>` : ""}
     <div class="btns">
       <a class="btn primary" href="${nav}" target="_blank" rel="noopener">🧭 Y aller</a>
@@ -305,6 +311,7 @@ function openDetail(id, keepScroll) {
     if (keepScroll) root.scrollTop = scroll;
     hydratePhotos(root);
     if (p.k.maree) fillTideInfo(p, $("#tideInfo", root));
+    setTimeout(() => drawPlaceMap(p, $("#placeMap", root)), 60);
     $("#addVisit", root).onclick = () => openVisitForm(id);
     $("#editPlace", root).onclick = () => openPlaceForm(id);
     $("#delPlace", root).onclick = () => {
@@ -463,13 +470,58 @@ $("#fab").onclick = () => {
 };
 
 // ---------- Carte ----------
-let map = null, layer = null;
+let map = null, layer = null, detailMap = null;
 const tiles = () => L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" });
+const satTiles = () => L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, maxNativeZoom: 18, attribution: "Imagerie © Esri" });
+function baseLayers(m, sat) {
+  const plan = tiles(), s = satTiles();
+  (sat ? s : plan).addTo(m);
+  L.control.layers({ "Plan": plan, "Satellite": s }, null, { position: "topright", collapsed: false }).addTo(m);
+}
+// Retour à pied calculé sur les chemins (service OSRM d'openstreetmap.de), mis en cache.
+async function footRoute(id, from, to) {
+  const key = "baleadenn.route." + id;
+  try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (c) return c; } catch (e) {}
+  const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+  const r = await fetch(url); if (!r.ok) throw new Error("itinéraire");
+  const j = await r.json();
+  const rt = j.routes && j.routes[0]; if (!rt) throw new Error("itinéraire vide");
+  const straight = km({ lat: from[0], lon: from[1] }, { lat: to[0], lon: to[1] }) * 1000;
+  if (rt.distance > Math.max(3 * straight, straight + 1500)) throw new Error("détour trop long");
+  const line = rt.geometry.coordinates.map(c => [c[1], c[0]]);
+  try { localStorage.setItem(key, JSON.stringify(line)); } catch (e) {}
+  return line;
+}
+function drawPlaceMap(p, el) {
+  if (!el || typeof L === "undefined") { if (el) el.innerHTML = `<div class="empty">Carte indisponible hors ligne.</div>`; return; }
+  if (detailMap) { detailMap.remove(); detailMap = null; }
+  detailMap = L.map(el, { zoomControl: true, scrollWheelZoom: false }).setView([p.lat, p.lon], 15);
+  baseLayers(detailMap, !!p.r || p.c === "plage" || p.c === "vue");
+  const pinIcon = (txt, cls) => L.divIcon({ className: "", iconSize: [30, 30], iconAnchor: [15, 15], html: `<div class="rt-pin ${cls}">${txt}</div>` });
+  if (!p.r) {
+    L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "", iconSize: [34, 34], iconAnchor: [17, 41], html: `<div class="pin cat-${p.c}" style="position:relative"><span>${CATS[p.c]?.e || "📍"}</span></div>` }) }).addTo(detailMap);
+    return;
+  }
+  const start = p.r[0], end = p.r[p.r.length - 1];
+  const aller = L.polyline(p.r, { color: "#f2c230", weight: 6, dashArray: "2 10", lineCap: "round", opacity: .95 }).addTo(detailMap);
+  const retourFallback = L.polyline([end, start], { color: "#3fbf6f", weight: 5, opacity: .9, dashArray: "8 8" }).addTo(detailMap);
+  L.marker(start, { icon: pinIcon("P", "start") }).addTo(detailMap).bindTooltip("Départ / parking");
+  L.marker(end, { icon: pinIcon("🚩", "end") }).addTo(detailMap).bindTooltip("Demi-tour");
+  detailMap.fitBounds(aller.getBounds().pad(0.6), { maxZoom: 17 });
+  const m = detailMap;
+  footRoute(p.id, end, start).then(line => {
+    if (m !== detailMap) return;
+    m.removeLayer(retourFallback);
+    const ret = L.polyline(line, { color: "#3fbf6f", weight: 5, opacity: .95 }).addTo(m);
+    aller.bringToFront();
+    m.fitBounds(ret.getBounds().extend(aller.getBounds()).pad(0.25), { maxZoom: 17 });
+  }).catch(() => {});
+}
 function renderMap() {
   if (typeof L === "undefined") { $("#map").innerHTML = `<div class="empty">La carte a besoin d'internet pour se charger.</div>`; return; }
   if (!map) {
     map = L.map("map").setView([S.settings.home.lat, S.settings.home.lon], 9);
-    tiles().addTo(map);
+    baseLayers(map, false);
     layer = L.layerGroup().addTo(map);
     $("#map").addEventListener("click", e => { const b = e.target.closest("[data-pop]"); if (b) openDetail(b.dataset.pop); });
     const Loc = L.Control.extend({ onAdd() {

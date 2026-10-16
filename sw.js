@@ -1,6 +1,6 @@
 // Baleadenn — fonctionnement hors ligne.
 // Changer VERSION à chaque mise à jour de l'appli pour forcer le rafraîchissement.
-const VERSION = "baleadenn-v3";
+const VERSION = "baleadenn-v4";
 const SHELL = ["./", "index.html", "app.js", "places.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "leaflet.js", "leaflet.css"];
 
 self.addEventListener("install", e => {
@@ -13,8 +13,8 @@ self.addEventListener("fetch", e => {
   const req = e.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  // Météo et fonds de carte : toujours en ligne (la météo est mémorisée par l'appli).
-  if (url.hostname.includes("open-meteo") || url.hostname.includes("tile.openstreetmap")) return;
+  // Météo, marées, fonds de carte et itinéraires : toujours en ligne (la météo est mémorisée par l'appli).
+  if (["open-meteo", "tile.openstreetmap", "arcgisonline", "routing.openstreetmap"].some(h => url.hostname.includes(h))) return;
   // Fichiers de l'appli : réseau d'abord (pour avoir les mises à jour), cache si hors ligne.
   if (url.origin === location.origin) {
     e.respondWith(fetch(req).then(r => { const c = r.clone(); caches.open(VERSION).then(ca => ca.put(req, c)); return r; })
