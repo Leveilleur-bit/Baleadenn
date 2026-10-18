@@ -35,6 +35,7 @@ const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", 
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
+const APP_VERSION = "v6";
 
 // ---------- État ----------
 const defaults = () => ({
@@ -90,7 +91,7 @@ function enrich(p) { return { ...p, min: driveMin(origin(), p), done: isDone(p.i
 function filtered() {
   const q = F.q.trim().toLowerCase();
   return allPlaces().map(enrich).filter(p => {
-    if (F.max && p.min > F.max) return false;
+    if (F.max && p.min > F.max && !q) return false; // une recherche par nom ignore la durée de trajet
     if (F.status === "todo" && p.done) return false;
     if (F.status === "done" && !p.done) return false;
     if (F.status === "fav" && !p.fav) return false;
@@ -743,7 +744,7 @@ async function renderSettings() {
       <b>Demat</b><span>Bonjour</span><b>Kenavo</b><span>Au revoir</span><b>Trugarez</b><span>Merci</span>
       <b>Baleadenn</b><span>Balade, promenade</span><b>Mor</b><span>Mer</span><b>Koad</b><span>Bois, forêt</span>
       <b>Heol</b><span>Soleil</span><b>Glav</b><span>Pluie</span><b>Avel</b><span>Vent</span><b>Kerne</b><span>Cornouaille</span></div></div>
-    <div class="foot">Baleadenn · Kenavo ar wech all ! ⚘</div>`;
+    <div class="foot">Baleadenn · ${APP_VERSION} · ${allPlaces().length} lieux<br>Kenavo ar wech all ! ⚘</div>`;
   $("#sSave").onclick = () => { readQuestionnaire(box); toast("Réglages enregistrés"); updateHello(); };
   $("#sHomeGps").onclick = () => locate().then(g => { S.settings.home = { lat: g.lat, lon: g.lon, label: "Maison" }; save(); renderSettings(); toast("Maison enregistrée"); }).catch(() => toast("Position introuvable"));
   $("#sHomeQ").onclick = () => { S.settings.home = { ...QUIMPER }; save(); renderSettings(); };
