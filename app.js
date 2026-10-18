@@ -799,5 +799,15 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 if (S.settings.from === "gps") locate().then(() => refresh()).catch(() => { S.settings.from = "home"; save(); refresh(); });
 renderList();
 if (!S.settings.onboarded) onboarding();
-if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  // Quand une nouvelle version prend le relais, on recharge une fois pour l'afficher (sauf si une fiche est ouverte).
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    if (!sheetOpen) location.reload(); else toast("Nouvelle version prête : rouvrez l'appli pour en profiter");
+  });
+  navigator.serviceWorker.register("sw.js").then(r => r.update()).catch(() => {});
+}
 })();
