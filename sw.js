@@ -1,10 +1,10 @@
 // Baleadenn — fonctionnement hors ligne.
 // Changer VERSION à chaque mise à jour de l'appli pour forcer le rafraîchissement.
-const VERSION = "baleadenn-v6";
-const SHELL = ["./", "index.html", "app.js", "places.js", "manifest.webmanifest", "icon-192.png", "icon-512.png", "leaflet.js", "leaflet.css"];
+const VERSION = "baleadenn-v7";
+const SHELL = ["./", "index.html", "app.js?v=7", "places.js?v=7", "manifest.webmanifest", "icon-192.png", "icon-512.png", "leaflet.js?v=7", "leaflet.css?v=7"];
 
 self.addEventListener("install", e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
 });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -18,7 +18,7 @@ self.addEventListener("fetch", e => {
   // Fichiers de l'appli : réseau d'abord (pour avoir les mises à jour), cache si hors ligne.
   if (url.origin === location.origin) {
     e.respondWith(fetch(req, { cache: "no-cache" }).then(r => { const c = r.clone(); caches.open(VERSION).then(ca => ca.put(req, c)); return r; })
-      .catch(() => caches.match(req).then(r => r || caches.match("index.html"))));
+      .catch(() => caches.match(req, { ignoreSearch: true }).then(r => r || caches.match("index.html"))));
     return;
   }
   // Polices : cache d'abord.
