@@ -35,7 +35,7 @@ const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", 
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 
 // ---------- État ----------
 const defaults = () => ({
@@ -731,7 +731,11 @@ async function renderSettings() {
   box.innerHTML = `<h2>Arventennoù <small>réglages</small></h2>
     <div class="section"><h3>Mon questionnaire</h3>${questionnaireHTML()}<button class="btn primary" id="sSave" style="width:100%">💾 Enregistrer</button></div>
     <div class="section"><h3>Maison</h3>
-      <div class="muted">Point de départ : <b>${esc(h.label)}</b> (${h.lat.toFixed(3)}, ${h.lon.toFixed(3)})</div>
+      <div class="muted">Point de départ des distances : <b>${esc(h.label)}</b></div>
+      <div class="field"><label>Adresse de la maison</label>
+        <input type="text" id="sAddr" value="${esc(S.settings.homeAddr || "")}" placeholder="Ex. : 1 rue de Brest, Quimper" autocomplete="street-address"></div>
+      <button class="btn primary" id="sAddrGo" style="width:100%">🔎 Utiliser cette adresse</button>
+      <div class="muted" style="font-size:12px;margin-top:6px">L'adresse reste uniquement sur ce téléphone.</div>
       <div class="btns"><button class="btn" id="sHomeGps">📍 Ma position = maison</button><button class="btn" id="sHomeQ">↺ Quimper centre</button></div></div>
     <div class="section"><h3>Sauvegarde</h3>
       <div class="muted" style="font-size:14px">Tout est gardé uniquement sur ce téléphone. Faites une sauvegarde de temps en temps (Google Drive, mail…).</div>
@@ -747,7 +751,22 @@ async function renderSettings() {
     <div class="foot">Baleadenn · ${APP_VERSION} · ${allPlaces().length} lieux<br>Kenavo ar wech all ! ⚘</div>`;
   $("#sSave").onclick = () => { readQuestionnaire(box); toast("Réglages enregistrés"); updateHello(); };
   $("#sHomeGps").onclick = () => locate().then(g => { S.settings.home = { lat: g.lat, lon: g.lon, label: "Maison" }; save(); renderSettings(); toast("Maison enregistrée"); }).catch(() => toast("Position introuvable"));
-  $("#sHomeQ").onclick = () => { S.settings.home = { ...QUIMPER }; save(); renderSettings(); };
+  $("#sHomeQ").onclick = () => { S.settings.home = { ...QUIMPER }; S.settings.homeAddr = ""; save(); renderSettings(); };
+  $("#sAddrGo").onclick = async () => {
+    const q = $("#sAddr").value.trim(); if (!q) { toast("Tapez une adresse"); return; }
+    toast("🔎 Recherche de l'adresse…");
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=fr&accept-language=fr&q=${encodeURIComponent(q)}`;
+      const r = await fetch(url); if (!r.ok) throw new Error("adresse");
+      const j = await r.json();
+      if (!j.length) { toast("Adresse introuvable : vérifiez l'orthographe"); return; }
+      const lat = +j[0].lat, lon = +j[0].lon;
+      if (km({ lat, lon }, QUIMPER) > 150) { toast("Adresse trouvée trop loin de Quimper : précisez la ville"); return; }
+      S.settings.home = { lat, lon, label: "Maison" }; S.settings.homeAddr = q; S.settings.from = "home";
+      try { localStorage.removeItem("baleadenn.meteo"); } catch (e) {}
+      save(); renderSettings(); toast("🏠 Maison enregistrée : distances recalculées");
+    } catch (e) { toast("Recherche impossible (pas de réseau ?)"); }
+  };
   $("#sExport").onclick = () => exportData($("#sWithPh").checked);
   $("#sImport").onclick = () => $("#sFile").click();
   $("#sFile").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) importData(f); };
