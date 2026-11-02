@@ -28,14 +28,15 @@ const CRITERIA = [
   { k: "annee", l: "Ouvert toute l'année", e: "📅" },
   { k: "eau", l: "Pieds dans l'eau", e: "🌊" },
   { k: "courte", l: "Balade courte (< 1 h)", e: "⏱️" },
-  { k: "maree", l: "À faire à marée basse", e: "🐚" }
+  { k: "maree", l: "À faire à marée basse", e: "🐚" },
+  { k: "chien", l: "Chiens acceptés", e: "🐕" }
 ];
 const DURS = [20, 40, 60, 90, 0];
 const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", "Pas aimé"]];
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
-const APP_VERSION = "v12";
+const APP_VERSION = "v13";
 
 // ---------- État ----------
 const defaults = () => ({
@@ -74,12 +75,29 @@ const childName = () => S.settings.child.trim() || "l'enfant";
 
 // ---------- Lieux ----------
 function parseK(k) { if (typeof k === "object" && k) return k; const o = {}; String(k || "").split(/\s+/).filter(Boolean).forEach(x => o[x] = true); return o; }
+// Chiens : règle par type de lieu, sauf exception sur la fiche (ch).
+// 1 = acceptés en laisse, 0 = interdits, "s" = plage interdite l'été (juin–sept. en général), "?" = inconnu.
+const DOG_DEF = { musee: 0, animaux: 0, jeux: 0, parc: 0, foret: 1, vue: 1, patrimoine: 1, plage: "s", littoral: "s" };
+const dogPol = p => p.ch !== undefined ? p.ch : (DOG_DEF[p.c] ?? "?");
+const dogSeason = (m = new Date().getMonth() + 1) => m >= 6 && m <= 9;
+function dogNow(p) { const d = dogPol(p); return d === 1 ? true : d === 0 ? false : d === "s" ? !dogSeason() : undefined; }
+function dogText(p) {
+  const d = dogPol(p);
+  if (p.k && p.k.chien === true && d !== 1) return "🐕 Chiens acceptés (d'après vous)";
+  if (p.k && p.k.chien === false && d !== 0) return "🚫🐕 Chiens interdits (d'après vous)";
+  return d === 1 ? "🐕 Chiens acceptés en laisse" : d === 0 ? "🚫🐕 Chiens interdits"
+    : d === "s" ? `🐕 Plage en général interdite aux chiens de juin à mi-septembre, chemins OK en laisse — panneaux à l'entrée${dogSeason() ? " (on est en saison)" : ""}`
+    : "🐕 Chiens : à vérifier sur place";
+}
+function withDog(k, p) { if (k.chien === undefined) { const d = dogNow(p); if (d !== undefined) k = { ...k, chien: d }; } return k; }
 function allPlaces() {
   const seed = (window.SEED_PLACES || []).filter(p => !S.hidden.includes(p.id)).map(p => {
     const e = S.edits[p.id] || {};
-    return { ...p, k: parseK(p.k), ...e, k: e.k ? e.k : parseK(p.k), seed: true };
+    const q = { ...p, ...e, seed: true };
+    q.k = withDog(e.k ? { ...e.k } : parseK(p.k), q);
+    return q;
   });
-  return seed.concat(S.custom.map(p => ({ ...p, k: parseK(p.k) })));
+  return seed.concat(S.custom.map(p => ({ ...p, k: withDog(parseK(p.k), p) })));
 }
 const placeById = id => allPlaces().find(p => p.id === id);
 const visitsOf = id => S.visits.filter(v => v.placeId === id).sort((a, b) => b.date.localeCompare(a.date));
@@ -302,6 +320,7 @@ function openDetail(id, keepScroll) {
       <button class="btn orange wide" id="addVisit">✍️ Raconter une sortie ici</button>
     </div>
     <div class="label">Infos pratiques</div>
+    <div class="info" style="font-size:14px">${dogText(p)}</div>
     <div class="info crit-list">${critHTML}</div>
     <div class="label">Nos sorties ici (${vs.length})</div>
     ${vs.length ? vs.map(visitHTML).join("") : `<div class="muted" style="padding:6px 0 4px">Pas encore venus. À découvrir !</div>`}
@@ -412,7 +431,10 @@ function openVisitForm(placeId, visitId) {
 let pickMap = null;
 function openPlaceForm(id, preset) {
   const old = id ? placeById(id) : null;
-  const p = old ? { ...old, k: { ...old.k } } : { id: "c_" + uid(), n: "", v: "", c: "foret", d: "", s: "", k: {}, lat: preset?.lat ?? origin().lat, lon: preset?.lon ?? origin().lon };
+  // On part des critères saisis (sans la règle « chiens » calculée automatiquement)
+  const rawK = !old ? {} : S.edits[old.id] && S.edits[old.id].k ? { ...S.edits[old.id].k }
+    : old.seed ? parseK((window.SEED_PLACES.find(x => x.id === old.id) || {}).k) : parseK((S.custom.find(x => x.id === old.id) || {}).k);
+  const p = old ? { ...old, k: rawK } : { id: "c_" + uid(), n: "", v: "", c: "foret", d: "", s: "", k: {}, lat: preset?.lat ?? origin().lat, lon: preset?.lon ?? origin().lon };
   const triRow = c => {
     const v = p.k[c.k];
     return `<div class="tri"><span>${c.e} ${esc(c.l)}</span><div class="seg" data-tri="${c.k}">
@@ -712,7 +734,7 @@ function costText(p, ad, en) {
   }
   return p.k.gratuit ? "💶 Gratuit" : "";
 }
-function planSuggestions(T, ad, en) {
+function planSuggestions(T, ad, en, dog) {
   const now = Date.now(), o = origin(), group = ad + en;
   const day = todayWeather();
   const wet = day ? rainy(day) : false, windy = day ? day.wind >= 45 : false;
@@ -721,6 +743,7 @@ function planSuggestions(T, ad, en) {
   for (const p0 of allPlaces()) {
     const p = enrich(p0);
     if (closedNow(p)) continue;
+    if (dog && p.k.chien === false) continue;
     const drive = p.min, maxVisit = T - 2 * drive, want = visitMin(p);
     if (maxVisit < Math.max(30, Math.min(want, 60) * 0.6)) continue; // pas assez de temps sur place
     const visit = Math.min(want, maxVisit);
@@ -749,6 +772,7 @@ function planSuggestions(T, ad, en) {
     for (const c of S.settings.criteria) if (p.k[c]) score += 0.3;
     score += (visit / want) * 1.5; // plus de temps sur place = mieux
     const darkWarn = outdoor && back > sun.set && leave > sun.set - 20 * 6e4;
+    if (dog) { if (p.k.chien === true) { score += 0.5; why.push(dogPol(p) === "s" ? "🐕 hors saison : chiens OK" : "🐕 en laisse"); } else why.push("🐕 à vérifier"); }
     out.push({ p, drive, visit, back, score, why, darkWarn, cost: costText(p, ad, en) });
   }
   out.sort((x, y) => y.score - x.score);
@@ -759,9 +783,11 @@ function planSuggestions(T, ad, en) {
 }
 function openPlanner() {
   const st = S.settings.plan || (S.settings.plan = { T: 120, ad: 2, en: 1 });
+  if (st.dog === undefined) st.dog = false;
   const draw = root => {
     $("#plDur", root).innerHTML = DUREES.map(([m, l]) => `<button class="chip ${st.T === m ? "on" : ""}" data-pt="${m}">${l}</button>`).join("");
     $("#plAd", root).textContent = st.ad; $("#plEn", root).textContent = st.en;
+    $("#plDog", root).checked = !!st.dog;
   };
   openSheet(`${head("✨ On va où ?")}
     <div class="label">On a devant nous…</div>
@@ -769,12 +795,14 @@ function openPlanner() {
     <div class="label">On est…</div>
     <div class="stepper"><span>👨‍👩 Adultes</span><button data-ps="ad,-1">−</button><b id="plAd"></b><button data-ps="ad,1">＋</button></div>
     <div class="stepper"><span>🧒 Enfants</span><button data-ps="en,-1">−</button><b id="plEn"></b><button data-ps="en,1">＋</button></div>
+    <label class="check"><input type="checkbox" id="plDog"> 🐕 Avec le chien</label>
     <div class="muted" style="font-size:13px;margin-top:6px">Départ : ${S.settings.from === "gps" && gps ? "ma position" : esc(S.settings.home.label)} · maintenant (${hhmm(Date.now())})</div>
     <button class="btn orange" id="plGo" style="width:100%;margin-top:12px">🎲 Trouver des idées</button>
     <div id="plRes"></div>`, root => {
     draw(root);
     root.addEventListener("click", e => {
       const t = e.target.closest("[data-pt]"); if (t) { st.T = +t.dataset.pt; save(); draw(root); }
+      if (e.target.id === "plDog") { st.dog = e.target.checked; save(); }
       const s = e.target.closest("[data-ps]"); if (s) { const [k, d] = s.dataset.ps.split(","); st[k] = Math.max(k === "ad" ? 1 : 0, Math.min(12, st[k] + +d)); save(); draw(root); }
       const op = e.target.closest("[data-plopen]"); if (op) openDetail(op.dataset.plopen);
     });
@@ -792,7 +820,7 @@ async function runPlanner(root, st) {
   for (const n of pts) tasks.push(getTides(TIDE_PTS.find(t => t.n === n)).catch(() => {}));
   await Promise.all(tasks);
   if (!$("#plRes", root)) return;
-  const { list, wet, sun } = planSuggestions(st.T, st.ad, st.en);
+  const { list, wet, sun } = planSuggestions(st.T, st.ad, st.en, st.dog);
   const day = todayWeather();
   const head2 = `<div class="advice ${wet ? "rain" : "sun"}" style="margin-top:14px">${day ? `${WMO(day.code)[0]} ${wet ? "Pluie probable : idées à l'abri." : "Temps sec : en route dehors !"}` : "Météo inconnue (hors ligne)."} · Coucher du soleil ${hhmm(sun.set)}</div>`;
   if (!list.length) { res.innerHTML = head2 + `<div class="empty">Rien ne rentre dans ce temps-là 😕<br>Essayez un peu plus de temps, ou « Ma position » si vous êtes déjà en route.</div>`; return; }

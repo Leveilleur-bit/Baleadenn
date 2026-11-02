@@ -1,7 +1,7 @@
 // Baleadenn — fonctionnement hors ligne.
 // Changer VERSION à chaque mise à jour de l'appli pour forcer le rafraîchissement.
-const VERSION = "baleadenn-v12";
-const SHELL = ["./", "index.html", "app.js?v=12", "places.js?v=12", "manifest.webmanifest", "icon-192.png", "icon-512.png", "leaflet.js?v=12", "leaflet.css?v=12"];
+const VERSION = "baleadenn-v13";
+const SHELL = ["./", "index.html", "app.js?v=13", "places.js?v=13", "manifest.webmanifest", "icon-192.png", "icon-512.png", "leaflet.js?v=13", "leaflet.css?v=13"];
 
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL.map(u => new Request(u, { cache: "reload" })))).then(() => self.skipWaiting()));
