@@ -35,7 +35,7 @@ const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", 
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
-const APP_VERSION = "v11";
+const APP_VERSION = "v12";
 
 // ---------- État ----------
 const defaults = () => ({
@@ -685,6 +685,129 @@ function fillTideInfo(p, el) {
   }).catch(() => { el.innerHTML = `Marées indisponibles (pas de réseau ?). <a href="https://maree.shom.fr/" target="_blank" rel="noopener">Voir le SHOM</a>`; });
 }
 
+// ---------- On va où ? (proposition de sorties) ----------
+// Temps passé sur place par défaut selon le type de lieu (minutes), si la fiche n'en précise pas.
+const VISIT = { jeux: 60, littoral: 70, plage: 90, foret: 75, musee: 90, animaux: 120, parc: 120, patrimoine: 60, vue: 45 };
+const visitMin = p => p.vt || p.dur || VISIT[p.c] || 75;
+const DUREES = [[60, "1 h"], [120, "2 h"], [180, "3 h"], [240, "Demi-journée"], [420, "Journée"]];
+// Coucher du soleil approximatif (formule NOAA simplifiée), en ms, pour la date et le lieu donnés.
+function sunTimes(date, lat, lon) {
+  const rad = Math.PI / 180, d0 = new Date(date); d0.setHours(12, 0, 0, 0);
+  const n = Math.floor((d0 - new Date(d0.getFullYear(), 0, 0)) / 864e5);
+  const g = 2 * Math.PI / 365 * (n - 1);
+  const decl = 0.006918 - 0.399912 * Math.cos(g) + 0.070257 * Math.sin(g) - 0.006758 * Math.cos(2 * g) + 0.000907 * Math.sin(2 * g) - 0.002697 * Math.cos(3 * g) + 0.00148 * Math.sin(3 * g);
+  const eqt = 229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
+  const ha = Math.acos(Math.cos(90.833 * rad) / (Math.cos(lat * rad) * Math.cos(decl)) - Math.tan(lat * rad) * Math.tan(decl)) / rad;
+  const utcMid = Date.UTC(d0.getFullYear(), d0.getMonth(), d0.getDate());
+  return { rise: utcMid + (720 - 4 * (lon + ha) - eqt) * 6e4, set: utcMid + (720 - 4 * (lon - ha) - eqt) * 6e4 };
+}
+function todayWeather() {
+  const w = lastWeather || (() => { try { return JSON.parse(localStorage.getItem("baleadenn.meteo") || "null"); } catch (e) { return null; } })();
+  return w && w.days ? w.days.find(x => x.date === dayKey(Date.now())) : null;
+}
+function costText(p, ad, en) {
+  if (p.prix) {
+    const t = ad * p.prix.a + en * p.prix.e;
+    return `💶 ~${Math.round(t)} € pour ${ad} adulte${ad > 1 ? "s" : ""}${en ? ` + ${en} enfant${en > 1 ? "s" : ""}` : ""} (tarifs ${p.prix.an}${p.prix.gratuitMoins ? `, gratuit avant ${p.prix.gratuitMoins} ans` : ""}, à vérifier)`;
+  }
+  return p.k.gratuit ? "💶 Gratuit" : "";
+}
+function planSuggestions(T, ad, en) {
+  const now = Date.now(), o = origin(), group = ad + en;
+  const day = todayWeather();
+  const wet = day ? rainy(day) : false, windy = day ? day.wind >= 45 : false;
+  const sun = sunTimes(now, o.lat, o.lon);
+  const out = [];
+  for (const p0 of allPlaces()) {
+    const p = enrich(p0);
+    if (closedNow(p)) continue;
+    const drive = p.min, maxVisit = T - 2 * drive, want = visitMin(p);
+    if (maxVisit < Math.max(30, Math.min(want, 60) * 0.6)) continue; // pas assez de temps sur place
+    const visit = Math.min(want, maxVisit);
+    const arrive = now + drive * 6e4, leave = arrive + visit * 6e4, back = leave + drive * 6e4;
+    const outdoor = !p.k.interieur;
+    if (wet && outdoor) continue;
+    if (windy && p.c === "vue") continue;
+    if (outdoor && arrive > sun.set - 30 * 6e4) continue; // il fera nuit
+    const why = [];
+    let score = Math.random() * 1.5;
+    if (p.fav) { score += 3; why.push("★ dans vos envies"); }
+    const last = visitsOf(p.id)[0];
+    if (!p.done) { score += 2; why.push("jamais fait"); }
+    else if (last && last.refaire) { score += 2; why.push("↻ à refaire"); }
+    else if (last && last.note >= 4) score += 1;
+    if (p.k.maree) {
+      const td = tideMem[tidePoint(p).n];
+      if (td) {
+        const low = td.ex.find(e => e.low && e.ms - 36e5 <= leave && e.ms + 72e5 >= arrive);
+        if (!low) continue; // marée haute pendant tout le créneau
+        score += 2; why.push(`🌊 marée basse ${hhmm(low.ms)}`);
+      } else why.push("🌊 vérifier la marée");
+    }
+    if (wet && p.k.interieur) { score += 2; why.push("☔ à l'abri"); }
+    if (group >= 4 && p.k.gratuit) score += 1;
+    for (const c of S.settings.criteria) if (p.k[c]) score += 0.3;
+    score += (visit / want) * 1.5; // plus de temps sur place = mieux
+    const darkWarn = outdoor && back > sun.set && leave > sun.set - 20 * 6e4;
+    out.push({ p, drive, visit, back, score, why, darkWarn, cost: costText(p, ad, en) });
+  }
+  out.sort((x, y) => y.score - x.score);
+  // Varier les types : au plus 2 lieux de la même catégorie dans les 5 premiers
+  const picked = [], perCat = {};
+  for (const s of out) { if ((perCat[s.p.c] || 0) >= 2) continue; perCat[s.p.c] = (perCat[s.p.c] || 0) + 1; picked.push(s); if (picked.length >= 5) break; }
+  return { list: picked, wet, sun };
+}
+function openPlanner() {
+  const st = S.settings.plan || (S.settings.plan = { T: 120, ad: 2, en: 1 });
+  const draw = root => {
+    $("#plDur", root).innerHTML = DUREES.map(([m, l]) => `<button class="chip ${st.T === m ? "on" : ""}" data-pt="${m}">${l}</button>`).join("");
+    $("#plAd", root).textContent = st.ad; $("#plEn", root).textContent = st.en;
+  };
+  openSheet(`${head("✨ On va où ?")}
+    <div class="label">On a devant nous…</div>
+    <div class="scroll" id="plDur" style="margin-top:4px"></div>
+    <div class="label">On est…</div>
+    <div class="stepper"><span>👨‍👩 Adultes</span><button data-ps="ad,-1">−</button><b id="plAd"></b><button data-ps="ad,1">＋</button></div>
+    <div class="stepper"><span>🧒 Enfants</span><button data-ps="en,-1">−</button><b id="plEn"></b><button data-ps="en,1">＋</button></div>
+    <div class="muted" style="font-size:13px;margin-top:6px">Départ : ${S.settings.from === "gps" && gps ? "ma position" : esc(S.settings.home.label)} · maintenant (${hhmm(Date.now())})</div>
+    <button class="btn orange" id="plGo" style="width:100%;margin-top:12px">🎲 Trouver des idées</button>
+    <div id="plRes"></div>`, root => {
+    draw(root);
+    root.addEventListener("click", e => {
+      const t = e.target.closest("[data-pt]"); if (t) { st.T = +t.dataset.pt; save(); draw(root); }
+      const s = e.target.closest("[data-ps]"); if (s) { const [k, d] = s.dataset.ps.split(","); st[k] = Math.max(k === "ad" ? 1 : 0, Math.min(12, st[k] + +d)); save(); draw(root); }
+      const op = e.target.closest("[data-plopen]"); if (op) openDetail(op.dataset.plopen);
+    });
+    $("#plGo", root).onclick = () => runPlanner(root, st);
+  });
+}
+async function runPlanner(root, st) {
+  const res = $("#plRes", root); if (!res) return;
+  res.innerHTML = `<div class="empty">⏳ Je regarde la météo et les marées…</div>`;
+  // Météo du jour (si absente ou vieille de plus de 3 h) et marées des points concernés
+  const w = todayWeather();
+  const tasks = [];
+  if (!w || !lastWeather || Date.now() - (lastWeather.at || 0) > 3 * 36e5) tasks.push(fetchWeather().then(d => { lastWeather = d; }).catch(() => {}));
+  const pts = new Set(allPlaces().filter(p => p.k.maree || parseK(p.k).maree).map(p => tidePoint(p).n));
+  for (const n of pts) tasks.push(getTides(TIDE_PTS.find(t => t.n === n)).catch(() => {}));
+  await Promise.all(tasks);
+  if (!$("#plRes", root)) return;
+  const { list, wet, sun } = planSuggestions(st.T, st.ad, st.en);
+  const day = todayWeather();
+  const head2 = `<div class="advice ${wet ? "rain" : "sun"}" style="margin-top:14px">${day ? `${WMO(day.code)[0]} ${wet ? "Pluie probable : idées à l'abri." : "Temps sec : en route dehors !"}` : "Météo inconnue (hors ligne)."} · Coucher du soleil ${hhmm(sun.set)}</div>`;
+  if (!list.length) { res.innerHTML = head2 + `<div class="empty">Rien ne rentre dans ce temps-là 😕<br>Essayez un peu plus de temps, ou « Ma position » si vous êtes déjà en route.</div>`; return; }
+  res.innerHTML = head2 + list.map((s, i) => `<div class="plan cat-${s.p.c}" data-plopen="${esc(s.p.id)}">
+      <div class="plan-h"><span class="plan-n">${i + 1}</span><span class="plan-e">${CATS[s.p.c]?.e || "📍"}</span><b>${esc(s.p.n)}</b></div>
+      <div class="plan-l">${esc(s.p.v)} · 🚗 ${fmtMin(s.drive)} · 🕐 ${fmtMin(s.visit)} sur place · 🏠 retour vers ${hhmm(s.back)}</div>
+      ${s.why.length ? `<div class="plan-w">${s.why.map(esc).join(" · ")}</div>` : ""}
+      ${s.cost ? `<div class="plan-w">${esc(s.cost)}</div>` : ""}
+      ${s.p.s ? `<div class="plan-w">🗓️ ${esc(s.p.s)}</div>` : ""}
+      ${s.darkWarn ? `<div class="plan-w" style="color:var(--ruz)">🌙 La nuit tombe vers ${hhmm(sun.set)} : ne traînez pas !</div>` : ""}
+    </div>`).join("") + `<button class="btn" id="plAgain" style="width:100%;margin-top:6px">🔀 D'autres idées</button>
+    <div class="muted" style="font-size:12px;margin-top:6px">Temps de trajet estimés. Vérifiez les horaires d'ouverture des lieux payants.</div>`;
+  $("#plAgain", root).onclick = () => runPlanner(root, st);
+}
+
 // ---------- Souvenirs ----------
 function renderMemories() {
   const box = $("#memories");
@@ -816,6 +939,7 @@ function onboarding() {
 // ---------- Démarrage ----------
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 if (S.settings.from === "gps") locate().then(() => refresh()).catch(() => { S.settings.from = "home"; save(); refresh(); });
+$("#planBtn").onclick = openPlanner;
 renderList();
 if (!S.settings.onboarded) onboarding();
 if ("serviceWorker" in navigator && location.protocol === "https:") {

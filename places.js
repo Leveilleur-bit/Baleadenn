@@ -15,7 +15,7 @@ window.SEED_PLACES = [
   { id: "musee-breton", n: "Musée départemental breton", v: "Quimper", c: "musee", lat: 47.9959, lon: -4.1018,
     d: "Coiffes, costumes brodés et meubles bretons : de quoi montrer les broderies de Cornouaille. Visite courte, au rythme de l'enfant.",
     s: "Souvent fermé le lundi hors été", k: "interieur toilettes annee courte" },
-  { id: "tycircus", n: "Ty Circus", v: "Quimper (Creac'h Gwen)", c: "parc", lat: 47.9799, lon: -4.0999,
+  { id: "tycircus", vt: 150, n: "Ty Circus", v: "Quimper (Creac'h Gwen)", c: "parc", lat: 47.9799, lon: -4.0999,
     d: "Grande aire de jeux couverte sur le thème du cirque : toboggans, piscine à balles, trampolines, karts et un coin pour les petits. Cafétéria.",
     s: "Hors vacances : mercredi, samedi, dimanche", k: "interieur jeux toilettes resto parking annee" },
   { id: "stangala", n: "Site du Stangala", v: "Ergué-Gabéric", c: "foret", lat: 48.0230, lon: -4.0655,
@@ -79,12 +79,12 @@ window.SEED_PLACES = [
   { id: "carnoet", n: "Forêt de Carnoët", v: "Quimperlé", c: "foret", lat: 47.8330, lon: -3.5520,
     d: "Grande forêt au bord de la Laïta, chemins larges et plats. Et la légende du château de Comorre à raconter en route.",
     k: "gratuit annee parking piquenique poussette" },
-  { id: "natae", n: "Les Terres de Nataé (zoo)", v: "Pont-Scorff", c: "animaux", lat: 47.8285, lon: -3.4005,
+  { id: "natae", vt: 240, prix: { a: 25.9, e: 19.9, gratuitMoins: 3, an: 2026 }, n: "Les Terres de Nataé (zoo)", v: "Pont-Scorff", c: "animaux", lat: 47.8285, lon: -3.4005,
     d: "Parc animalier de 14 ha (l'ancien zoo de Pont-Scorff) : animaux du monde entier et légendes bretonnes. Prévoir la journée.",
     s: "Festival des Animaux de Lumière le soir, d'octobre à janvier", k: "animaux toilettes resto parking piquenique" },
 
   // — Pays bigouden —
-  { id: "parcbota", n: "Parc botanique de Cornouaille", v: "Combrit", c: "parc", lat: 47.8865, lon: -4.1891,
+  { id: "parcbota", vt: 90, prix: { a: 8.5, e: 4.5, an: 2026 }, n: "Parc botanique de Cornouaille", v: "Combrit", c: "parc", lat: 47.8865, lon: -4.1891,
     d: "Jardin sous les pins avec un jardin aquatique (nénuphars, ponts, poissons) et un petit musée de minéraux qui brillent.",
     s: "De mi-mars à mi-novembre", mo: [3,4,5,6,7,8,9,10,11], k: "toilettes parking" },
   { id: "iletudy", n: "Plage de l'Île-Tudy", v: "Île-Tudy", c: "plage", lat: 47.8445, lon: -4.1685,
@@ -104,10 +104,10 @@ window.SEED_PLACES = [
     s: "Montée du phare en saison", mo: [4,5,6,7,8,9], k: "parking" },
 
   // — Cap Sizun —
-  { id: "aquashow", n: "Aquashow", v: "Audierne", c: "musee", lat: 48.0228, lon: -4.5375,
+  { id: "aquashow", vt: 150, prix: { a: 15, e: 10, gratuitMoins: 3, an: 2026 }, n: "Aquashow", v: "Audierne", c: "musee", lat: 48.0228, lon: -4.5375,
     d: "Une cinquantaine d'aquariums de poissons bretons, un bassin tactile et un spectacle d'oiseaux qui volent au ras des têtes.",
     s: "Avril–septembre ; hors saison l'après-midi pendant les vacances", mo: [2,3,4,5,6,7,8,9,10,12], k: "interieur toilettes resto parking animaux" },
-  { id: "raz", n: "Pointe du Raz", v: "Plogoff", c: "vue", lat: 48.0390, lon: -4.7385,
+  { id: "raz", vt: 90, n: "Pointe du Raz", v: "Plogoff", c: "vue", lat: 48.0390, lon: -4.7385,
     d: "Le bout du Finistère : sentier jusqu'à la pointe (la main bien tenue près des falaises), navette depuis le parking.",
     k: "toilettes resto parking annee" },
   { id: "trepasses", n: "Baie des Trépassés", v: "Plogoff", c: "plage", lat: 48.0455, lon: -4.7080,
@@ -124,10 +124,10 @@ window.SEED_PLACES = [
   { id: "mineraux", n: "Maison des minéraux", v: "Crozon", c: "musee", lat: 48.2385, lon: -4.5480,
     d: "Des pierres qui brillent dans le noir dans la salle de fluorescence : un petit musée qui fascine les enfants.",
     s: "Vérifier les horaires hors vacances", k: "interieur toilettes parking" },
-  { id: "trevarez", n: "Domaine de Trévarez", v: "Saint-Goazec", c: "parc", lat: 48.1555, lon: -3.8265,
+  { id: "trevarez", vt: 120, n: "Domaine de Trévarez", v: "Saint-Goazec", c: "parc", lat: 48.1555, lon: -3.8265,
     d: "Château rose et grand parc aux allées praticables, jardins et animations de saison (Noël, rhododendrons au printemps).",
     s: "Vérifier les dates d'ouverture", k: "toilettes resto parking poussette" },
-  { id: "huelgoat", n: "Forêt et chaos d'Huelgoat", v: "Huelgoat", c: "foret", lat: 48.3650, lon: -3.7455,
+  { id: "huelgoat", vt: 120, n: "Forêt et chaos d'Huelgoat", v: "Huelgoat", c: "foret", lat: 48.3650, lon: -3.7455,
     d: "Rochers géants dans la forêt, grotte du Diable, roche tremblante qu'on peut faire bouger : un vrai décor de contes bretons.",
     k: "gratuit annee parking piquenique resto" },
   { id: "menezmeur", n: "Domaine de Menez-Meur", v: "Hanvec", c: "animaux", lat: 48.3165, lon: -4.0575,
@@ -138,10 +138,10 @@ window.SEED_PLACES = [
     s: "De mars à octobre environ", mo: [3,4,5,6,7,8,9,10], k: "piquenique parking toilettes" },
 
   // — Plus loin (≈ 1 h) —
-  { id: "oceanopolis", n: "Océanopolis", v: "Brest", c: "musee", lat: 48.3900, lon: -4.4350,
+  { id: "oceanopolis", vt: 300, n: "Océanopolis", v: "Brest", c: "musee", lat: 48.3900, lon: -4.4350,
     d: "Le grand parc des océans : phoques, manchots, loutres, requins. La sortie pluie par excellence, pour une journée entière.",
     k: "interieur toilettes resto parking animaux poussette annee" },
-  { id: "recre3cures", n: "La Récré des 3 Curés", v: "Milizac", c: "parc", lat: 48.4670, lon: -4.5640,
+  { id: "recre3cures", vt: 300, n: "La Récré des 3 Curés", v: "Milizac", c: "parc", lat: 48.4670, lon: -4.5640,
     d: "Parc d'attractions familial au bord d'un lac, avec beaucoup de manèges accessibles dès 3–4 ans.",
     s: "D'avril à début septembre", mo: [4,5,6,7,8,9], k: "toilettes resto parking piquenique jeux" },
 
@@ -194,7 +194,7 @@ window.SEED_PLACES = [
   { id: "moulinneuf", n: "Étang du Moulin Neuf", v: "Plonéour-Lanvern", c: "foret", lat: 47.89490, lon: -4.23908,
     d: "Balade calme entre étang et bois : un premier tronçon plat d'environ 700 m avec des bancs tous les 200 m (accessible en poussette) et des tables de pique-nique. Hérons, cygnes et canards. Le tour complet (7 à 9 km) est trop long pour un petit : faire demi-tour quand on veut.",
     k: "gratuit annee poussette piquenique animaux courte parking" },
-  { id: "ileauxmomes", n: "L'Île aux Mômes", v: "Concarneau", c: "parc", lat: 47.90237, lon: -3.90669,
+  { id: "ileauxmomes", vt: 120, n: "L'Île aux Mômes", v: "Concarneau", c: "parc", lat: 47.90237, lon: -3.90669,
     d: "Aire de jeux couverte avec un espace pour les petits : une autre idée pour les jours de pluie (avis partagés sur la surveillance).",
     k: "interieur jeux toilettes resto parking annee" },
 
