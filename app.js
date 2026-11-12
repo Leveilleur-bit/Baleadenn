@@ -36,7 +36,7 @@ const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", 
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
-const APP_VERSION = "v13";
+const APP_VERSION = "v14";
 
 // ---------- État ----------
 const defaults = () => ({
