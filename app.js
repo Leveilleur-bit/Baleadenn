@@ -36,7 +36,7 @@ const MOODS = [["😍", "Adoré"], ["🙂", "Aimé"], ["😐", "Bof"], ["😕", 
 const MONTHS = ["janvier","février","mars","avril","mai","juin","juillet","août","septembre","octobre","novembre","décembre"];
 const DAYS = ["dim.","lun.","mar.","mer.","jeu.","ven.","sam."];
 const KEY = "baleadenn.v1";
-const APP_VERSION = "v14";
+const APP_VERSION = "v15";
 
 // ---------- État ----------
 const defaults = () => ({
@@ -502,14 +502,14 @@ function baseLayers(m, sat) {
   L.control.layers({ "Plan": plan, "Satellite": s }, null, { position: "topright", collapsed: false }).addTo(m);
 }
 // Retour à pied calculé sur les chemins (service OSRM d'openstreetmap.de), mis en cache.
-async function footRoute(id, from, to) {
+async function footRoute(id, pts) {
   const key = "baleadenn.route." + id;
   try { const c = JSON.parse(localStorage.getItem(key) || "null"); if (c) return c; } catch (e) {}
-  const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${from[1]},${from[0]};${to[1]},${to[0]}?overview=full&geometries=geojson`;
+  const url = `https://routing.openstreetmap.de/routed-foot/route/v1/foot/${pts.map(q => `${q[1]},${q[0]}`).join(";")}?overview=full&geometries=geojson`;
   const r = await fetch(url); if (!r.ok) throw new Error("itinéraire");
   const j = await r.json();
   const rt = j.routes && j.routes[0]; if (!rt) throw new Error("itinéraire vide");
-  const straight = km({ lat: from[0], lon: from[1] }, { lat: to[0], lon: to[1] }) * 1000;
+  let straight = 0; for (let i = 1; i < pts.length; i++) straight += km({ lat: pts[i - 1][0], lon: pts[i - 1][1] }, { lat: pts[i][0], lon: pts[i][1] }) * 1000;
   if (rt.distance > Math.max(3 * straight, straight + 1500)) throw new Error("détour trop long");
   const line = rt.geometry.coordinates.map(c => [c[1], c[0]]);
   try { localStorage.setItem(key, JSON.stringify(line)); } catch (e) {}
@@ -527,12 +527,14 @@ function drawPlaceMap(p, el) {
   }
   const start = p.r[0], end = p.r[p.r.length - 1];
   const aller = L.polyline(p.r, { color: "#f2c230", weight: 6, dashArray: "2 10", lineCap: "round", opacity: .95 }).addTo(detailMap);
-  const retourFallback = L.polyline([end, start], { color: "#3fbf6f", weight: 5, opacity: .9, dashArray: "8 8" }).addTo(detailMap);
+  const via = p.via || [];
+  const retourFallback = L.polyline([end, ...via.map(v => v.ll), start], { color: "#3fbf6f", weight: 5, opacity: .9, dashArray: "8 8" }).addTo(detailMap);
   L.marker(start, { icon: pinIcon("P", "start") }).addTo(detailMap).bindTooltip("Départ / parking");
   L.marker(end, { icon: pinIcon("🚩", "end") }).addTo(detailMap).bindTooltip("Demi-tour");
+  via.forEach(v => L.marker(v.ll, { icon: pinIcon(v.e || "•", "end") }).addTo(detailMap).bindTooltip(v.n || "Étape"));
   detailMap.fitBounds(aller.getBounds().pad(0.6), { maxZoom: 17 });
   const m = detailMap;
-  footRoute(p.id, end, start).then(line => {
+  footRoute(p.id, [end, ...via.map(v => v.ll), start]).then(line => {
     if (m !== detailMap) return;
     m.removeLayer(retourFallback);
     const ret = L.polyline(line, { color: "#3fbf6f", weight: 5, opacity: .95 }).addTo(m);
